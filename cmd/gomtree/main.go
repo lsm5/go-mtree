@@ -15,17 +15,21 @@ import (
 )
 
 var (
+	// flags common with mtree(8)
 	flCreate           = flag.Bool("c", false, "create a directory hierarchy spec")
 	flFile             = flag.String("f", "", "directory hierarchy spec to validate")
 	flPath             = flag.String("p", "", "root path that the hierarchy spec is relative to")
 	flAddKeywords      = flag.String("K", "", "Add the specified (delimited by comma or space) keywords to the current set of keywords")
 	flUseKeywords      = flag.String("k", "", "Use the specified (delimited by comma or space) keywords as the current set of keywords")
-	flListKeywords     = flag.Bool("list-keywords", false, "List the keywords available")
-	flResultFormat     = flag.String("result-format", "bsd", "output the validation results using the given format (bsd, json, path)")
+	flUpdateAttributes = flag.Bool("u", false, "Modify the owner, group, permissions and xattrs of files, symbolic links and devices, to match the provided specification. This is not compatible with '-T'.")
+
+	// gomtree specific flags
 	flTar              = flag.String("T", "", "use tar archive to create or validate a directory hierarchy spec (\"-\" indicates stdin)")
 	flBsdKeywords      = flag.Bool("bsd-keywords", false, "only operate on keywords that are supported by upstream mtree(8)")
-	flListUsedKeywords = flag.Bool("list-used", false, "list all the keywords found in a validation manifest")
 	flDebug            = flag.Bool("debug", false, "output debug info to STDERR")
+	flListKeywords     = flag.Bool("list-keywords", false, "List the keywords available")
+	flListUsedKeywords = flag.Bool("list-used", false, "list all the keywords found in a validation manifest")
+	flResultFormat     = flag.String("result-format", "bsd", "output the validation results using the given format (bsd, json, path)")
 	flVersion          = flag.Bool("version", false, "display the version of this tool")
 )
 
@@ -200,6 +204,14 @@ func main() {
 		rootPath = *flPath
 	}
 
+	// -u
+	// Failing early here. Processing is done below.
+	if *flUpdateAttributes && *flTar != "" {
+		log.Println("ERROR: -u can not be used with -T")
+		isErr = true
+		return
+	}
+
 	// -T <tar file>
 	var tdh *mtree.DirectoryHierarchy
 	if *flTar != "" {
@@ -252,6 +264,23 @@ func main() {
 				return
 			}
 			dh.WriteTo(os.Stdout)
+		}
+	} else if *flUpdateAttributes && dh != nil {
+		// -u
+		// this comes before the next case, intentionally.
+
+		// TODO brainstorm where to allow setting of xattrs. Maybe a new flag that allows a comma delimited list of keywords to update?
+		updateKeywords := []string{"uid", "gid", "mode"}
+
+		result, err := mtree.Update(rootPath, dh, updateKeywords)
+		if err != nil {
+			log.Println(err)
+			isErr = true
+			return
+		}
+
+		if result != nil {
+			fmt.Printf("%#v\n", result)
 		}
 	} else if tdh != nil || dh != nil {
 		var res *mtree.Result
