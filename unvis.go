@@ -15,6 +15,7 @@ func Unvis(src string) (string, error) {
 	defer C.free(unsafe.Pointer(cDst))
 	defer C.free(unsafe.Pointer(cSrc))
 	ret := C.strunvis(cDst, cSrc)
+	// TODO(vbatts) this needs to be confirmed against UnvisError
 	if ret == -1 {
 		return "", fmt.Errorf("failed to decode: %q", src)
 	}
